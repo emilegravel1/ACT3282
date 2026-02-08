@@ -1,0 +1,262 @@
+##########################
+########## 2 #############
+
+
+import pandas as pd
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+
+def load_aapl_data():
+
+    # Récupère le dossier où se trouve ton script Python actuel
+    dossier_actuel = os.path.dirname(__file__)
+    nom_fichier = "20210203_AAPL.csv"
+
+    # Combine les deux pour créer le chemin complet
+    chemin_complet = os.path.join(dossier_actuel, nom_fichier)
+
+    # lecture du fichier
+    df = pd.read_csv(chemin_complet)
+
+    print(df.head())
+
+    # renommer colonnes
+    df = df.rename(columns={
+        "Time": "timestamp",
+        "Shares": "volume",
+        "Price": "price"
+    })
+
+    # convertir timestamp (ms apres minuit)
+    base_date = pd.Timestamp("2021-02-03")
+    df["timestamp"] = pd.to_timedelta(df["timestamp"], unit="ms")
+    df["timestamp"] = base_date + df["timestamp"]
+
+    # convertir prix
+    df["price"] = df["price"] / 10000
+
+    # argent traded
+    df["dollar"] = df["price"] * df["volume"]
+
+    df = df.sort_values("timestamp").reset_index(drop=True)
+
+    print(df.head())
+
+    return df
+
+df = load_aapl_data()
+
+
+# time bars a chaque 1 min
+def make_time_bars(df, freq="1min"):
+    # Mettre timestamp en index pour pouvoir resample
+    t = df.set_index("timestamp")
+
+    bars = pd.DataFrame()
+    bars["open"]  = t["price"].resample(freq).first()
+    bars["high"]  = t["price"].resample(freq).max()
+    bars["low"]   = t["price"].resample(freq).min()
+    bars["close"] = t["price"].resample(freq).last()
+    bars["volume"] = t["volume"].resample(freq).sum()
+    bars["dollar"] = t["dollar"].resample(freq).sum()
+    bars["n_ticks"] = t["price"].resample(freq).count()
+
+    # enlever les intervalles vides
+    bars = bars.dropna().reset_index()
+
+    return bars
+
+time_bars_1min = make_time_bars(df, freq="1min")
+print(time_bars_1min.head())
+
+# graphique time bars
+plt.figure(figsize=(10,4))
+plt.plot(time_bars_1min["timestamp"], time_bars_1min["close"])
+plt.title("AAPL - Time bars 1min (close)")
+plt.xlabel("Time")
+plt.ylabel("Close")
+plt.tight_layout()
+plt.show()
+
+#nombre de ticks
+ticks_per_bar = 500
+
+#ticks bar
+def make_tick_bars(df, ticks_per_bar=500):
+
+    # créer groupes de trades
+    grp = np.arange(len(df)) // ticks_per_bar
+
+    g = df.groupby(grp)
+
+    tick_bars = pd.DataFrame({
+        "timestamp": g["timestamp"].last(),
+        "open": g["price"].first(),
+        "high": g["price"].max(),
+        "low": g["price"].min(),
+        "close": g["price"].last(),
+        "volume": g["volume"].sum(),
+        "dollar": g["dollar"].sum(),
+        "n_ticks": g.size()
+    }).reset_index(drop=True)
+
+    return tick_bars
+
+tick_bars = make_tick_bars(df, ticks_per_bar=500)
+print(tick_bars.head())
+
+
+#graphique des tick bars
+plt.figure(figsize=(10,4))
+plt.plot(tick_bars["timestamp"], tick_bars["close"])
+plt.title("Tick Bars (500) - AAPL")
+plt.xlabel("Time")
+plt.ylabel("Price")
+plt.show()
+
+
+def make_dollar_bars(df, dollar_per_bar=4_000_000):
+
+    # identifiant de groupe: change quand on franchit un multiple de dollar_per_bar
+    grp = (df["dollar"].cumsum() // dollar_per_bar).astype(int)
+
+    g = df.groupby(grp)
+
+    dollar_bars = pd.DataFrame({
+        "timestamp": g["timestamp"].last(),
+        "open": g["price"].first(),
+        "high": g["price"].max(),
+        "low": g["price"].min(),
+        "close": g["price"].last(),
+        "volume": g["volume"].sum(),
+        "dollar": g["dollar"].sum(),
+        "n_ticks": g.size()
+    }).reset_index(drop=True)
+
+    return dollar_bars
+
+dollar_bars = make_dollar_bars(df, dollar_per_bar=4_000_000)
+print(dollar_bars.head())
+
+#dollar bars graphiquement
+plt.figure(figsize=(10,4))
+plt.plot(dollar_bars["timestamp"], dollar_bars["close"])
+plt.title("AAPL - Dollar Bars")
+plt.xlabel("Time")
+plt.ylabel("Price")
+plt.show()
+
+
+# tau????????
+def label_fixed_time_horizon(bars, h=10, tau=0.001, price_col="close"):
+    out = bars.copy()
+
+    p_t = out[price_col].astype(float)
+    p_th = p_t.shift(-h)
+
+    # rendement simple: p_{t+h}/p_t - 1
+    r = (p_th / p_t) - 1
+
+    # labels
+    out["ret_fwd"] = r
+    out["y_fixed"] = np.where(r > tau, 1, np.where(r < -tau, -1, 0))
+
+    # enlever les dernières h lignes (pas de futur)
+    out = out.dropna(subset=["ret_fwd"]).reset_index(drop=True)
+    return out
+
+
+def label_dynamic_tau(bars, h=10, k=1.0, vol_window=50, price_col="close"):
+    out = bars.copy()
+
+    p = out[price_col].astype(float)
+
+    # rendements 1-bar pour estimer la volatilité
+    ret_1 = p.pct_change()
+
+    # sigma rolling
+    sigma = ret_1.rolling(vol_window).std()
+
+    # tau_t dynamique
+    tau_t = k * sigma
+
+    # rendement futur sur h bars
+    p_th = p.shift(-h)
+    r = (p_th / p) - 1
+
+    out["ret_fwd"] = r
+    out["tau_t"] = tau_t
+    out["y_dyn"] = np.where(r > tau_t, 1, np.where(r < -tau_t, -1, 0))
+
+    # enlever lignes sans futur ou sans sigma
+    out = out.dropna(subset=["ret_fwd", "tau_t"]).reset_index(drop=True)
+    return out
+
+# --- labels FIXED (ex: horizon 10 minutes, tau 0.1%) ---
+time_bars_labeled_fixed = label_fixed_time_horizon(time_bars_1min, h=10, tau=0.001)
+print(time_bars_labeled_fixed[["timestamp", "close", "ret_fwd", "y_fixed"]].head())
+print(time_bars_labeled_fixed["y_fixed"].value_counts())
+
+# --- labels DYNAMIQUES (ex: horizon 10, sigma sur 50 bars, k=1) ---
+time_bars_labeled_dyn = label_dynamic_tau(time_bars_1min, h=10, k=1.0, vol_window=50)
+print(time_bars_labeled_dyn[["timestamp", "close", "ret_fwd", "tau_t", "y_dyn"]].head())
+print(time_bars_labeled_dyn["y_dyn"].value_counts())
+
+
+# --- labels FIXED pour tick bars ---
+tick_bars_labeled_fixed = label_fixed_time_horizon(tick_bars, h=10, tau=0.001)
+print(tick_bars_labeled_fixed[["timestamp", "close", "ret_fwd", "y_fixed"]].head())
+print(tick_bars_labeled_fixed["y_fixed"].value_counts())
+
+# --- labels DYNAMIQUES pour tick bars ---
+tick_bars_labeled_dyn = label_dynamic_tau(tick_bars, h=10, k=1.0, vol_window=50)
+print(tick_bars_labeled_dyn[["timestamp", "close", "ret_fwd", "tau_t", "y_dyn"]].head())
+print(tick_bars_labeled_dyn["y_dyn"].value_counts())
+
+
+# --- labels FIXED pour dollar bars ---
+dollar_bars_labeled_fixed = label_fixed_time_horizon(dollar_bars, h=10, tau=0.001)
+print(dollar_bars_labeled_fixed[["timestamp", "close", "ret_fwd", "y_fixed"]].head())
+print(dollar_bars_labeled_fixed["y_fixed"].value_counts())
+
+# --- labels DYNAMIQUES pour dollar bars ---
+dollar_bars_labeled_dyn = label_dynamic_tau(dollar_bars, h=10, k=1.0, vol_window=50)
+print(dollar_bars_labeled_dyn[["timestamp", "close", "ret_fwd", "tau_t", "y_dyn"]].head())
+print(dollar_bars_labeled_dyn["y_dyn"].value_counts())
+
+#fonction pour combiner donnees 
+def add_features(bars_labeled):
+
+    df = bars_labeled.copy()
+
+    # rendement 1 bar
+    df["ret_1"] = df["close"].pct_change()
+
+    # range high-low normalisé
+    df["hl_range"] = (df["high"] - df["low"]) / df["close"]
+
+    # open-close return
+    df["oc_return"] = (df["close"] - df["open"]) / df["open"]
+
+    # log volume
+    df["log_volume"] = np.log1p(df["volume"])
+
+    # volatilité rolling
+    df["vol_20"] = df["ret_1"].rolling(20).std()
+
+    df = df.dropna().reset_index(drop=True)
+
+    return df
+
+time_dataset = add_features(time_bars_labeled_fixed)
+print(time_dataset.head())
+print("Time bars dataset shape:", time_dataset.shape)
+
+tick_dataset = add_features(tick_bars_labeled_fixed)
+print(tick_dataset.head())
+print("Tick bars dataset shape:", tick_dataset.shape)
+
+dollar_dataset = add_features(dollar_bars_labeled_fixed)
+print(dollar_dataset.head())
+print("Dollar bars dataset shape:", dollar_dataset.shape)
