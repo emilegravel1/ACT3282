@@ -1,0 +1,111 @@
+#1 JPM et AAPL vs SPY
+
+#2
+
+#a)
+
+
+install.packages("PerformanceAnalytics")
+install.packages("quantmod")
+library(PerformanceAnalytics)
+library(quantmod)
+
+#aller chercher sur yahoo finance les donnees financieres de JP Morgan et Apple
+getSymbols("AAPL", src = "yahoo")
+getSymbols("JPM", src = "yahoo")
+
+aapl_close <- AAPL$AAPL.Close
+jpm_close <- JPM$JPM.Close
+
+#graphique des prix de fermetures
+
+plot(aapl_close, main = "Prix de fermeture de AAPL")
+plot(jpm_close, main = "Prix de fermeture de JPM")
+
+#b) trouver log rendements et faire un graphique
+
+logReturn_aapl <- diff(log(aapl_close))
+logReturn_jpm <- diff(log(jpm_close))
+plot(logReturn_aapl, main = "log-rendements calculés à partir des prix de fermeture (AAPL)")
+plot(logReturn_jpm, main = "log-rendements calculés à partir des prix de fermeture (JPM)")
+
+#c) Calcul des 4 premiers moment de la distributions des log-rendements
+
+logReturn2_aapl = logReturn_aapl[-1]
+
+mu_aapl <- mean(logReturn2_aapl)
+sd_aapl <- sd(logReturn2_aapl)
+print(paste0("La moyenne des log rendements de AAPL est de ",round(mu_aapl,6)*100, 
+             "% et l'écart-type est de ", round(sd_aapl,6)*100,"%"))
+
+
+logReturn2_jpm <- logReturn_jpm[-1]
+
+mu_jpm <- mean(logReturn2_jpm)
+sd_jpm <- sd(logReturn2_jpm)
+print(paste0("La moyenne des log rendements de JPM est de ",round(mu_jpm,6)*100, 
+             "% et l'écart-type est de ", round(sd_jpm,6)*100,"%"))
+
+skew_aapl <- skewness(logReturn2_aapl)
+kurt_aapl <- kurtosis(logReturn2_aapl)
+print(paste0("Le facteur d'asymmétrie des log rendements de AAPL est de ",round(skew_aapl,6), 
+             " et le facteur d'applatissement est de ", round(kurt_aapl,6)))
+
+skew_jpm <- skewness(logReturn2_jpm)
+kurt_jpm <- kurtosis(logReturn2_jpm)
+print(paste0("Le facteur d'asymmétrie des log rendements de JPM est de ",round(skew_jpm,6), 
+             " et le facteur d'applatissement est de ", round(kurt_jpm,6)))
+
+
+#d) Un graphique de la densité empirique des log-rendements et de la fonction de densité de la loi normale (sur le même graphique).
+
+curve(dnorm(x, 
+            mean = mu_aapl, 
+            sd = sd_aapl, 
+            log = FALSE),
+      main = "Daily Log-Returns Density - AAPL",
+      type = "l", 
+      xlab = "Returns",
+      col  = "black",
+      xlim = c(-.04,.04),
+      ylim = c(0,70),
+      ylab = "density")
+lines(density(logReturn2_aapl),
+      xlim = c(-.04,.04),
+      col = "green")
+
+
+curve(dnorm(x, 
+            mean = mu_jpm, 
+            sd = sd_jpm, 
+            log = FALSE),
+      main = "Daily Log-Returns Density - JPM",
+      type = "l", 
+      xlab = "Returns",
+      col  = "black",
+      xlim = c(-.04,.04),
+      ylim = c(0,70),
+      ylab = "density")
+lines(density(logReturn2_jpm),
+      xlim = c(-.04,.04),
+      col = "green")
+
+
+#e) Un diagramme Quantile-Quantile (QQ-plot)
+
+par(mfrow=c(1,1))
+qqnorm(logReturn2_aapl, main = "Q-Q Plot AAPL"); qqline(logReturn2_aapl, col = 2)
+
+par(mfrow=c(1,1))
+qqnorm(logReturn2_jpm, main = "Q-Q Plot JPM"); qqline(logReturn2_jpm, col = 2)
+
+
+#f) L’estimation de densité par noyau
+
+
+
+
+#g) Un graphique de la densité estimée par noyau et de la densité d’une loi normale (dans le même graphique)
+
+#voir section4.R
+
