@@ -1,0 +1,196 @@
+setwd("/Users/emilegravel/Desktop/École/Cours/ACT3282/Devoir 1")
+library(xts)
+library(lubridate)
+library(quantmod)
+library(ghyp)
+library(agricolae)
+library(PerformanceAnalytics)
+
+######################            Problème 1            #######################
+
+####################################   1   ####################################
+
+getSymbols("SPY",from=Sys.Date()%m-%years(10),to=Sys.Date())
+getSymbols("AAPL",from=Sys.Date()%m-%years(10),to=Sys.Date())
+getSymbols("JPM",from=Sys.Date()%m-%years(10),to=Sys.Date())
+
+par(mfrow=c(1,1))
+plot(SPY$SPY.Close,ylim=c(0,700),main="10 year data")
+lines(JPM$JPM.Close,col="blue")
+lines(AAPL$AAPL.Close,col="red")
+addLegend("topleft",
+       legend.names = c("S&P500", "JPM","AAPL"),
+       col = c("black","blue","red"),
+       lwd=2 )
+
+####################################   2   ####################################
+
+#------------------------------------- a) ------------------------------------#
+
+plot(AAPL$AAPL.Close, main="AAPL price over 10 years")
+plot(JPM$JPM.Close, main="JPM price over 10 years")
+
+#------------------------------------- b) ------------------------------------#
+
+AAPL$log_ret <- Return.calculate(AAPL$AAPL.Close, method="log")[-1]
+AAPL[1,7] <- 0
+aapllr <- as.vector(AAPL$log_ret)
+plot(aapllr,type="l",lwd=1, main="AAPL log returns")
+
+JPM$log_ret <- Return.calculate(JPM$JPM.Close, method="log")[-1]
+JPM[1,7] <- 0
+jpmlr <- as.vector(JPM$log_ret)
+plot(jpmlr,type="l",lwd=1,, main="JPM log returns")
+
+#------------------------------------- c) ------------------------------------#
+
+Moments <- matrix(c(mean(aapllr),
+                    mean(jpmlr),
+                    sd(aapllr),
+                    sd(jpmlr),
+                    skewness(aapllr),
+                    skewness(jpmlr),
+                    kurtosis(aapllr),
+                    kurtosis(jpmlr)),4,2,
+                  dimnames = list(c("mean","sd","skw","kurt"),c("AAPL","JPM")))
+
+#------------------------------------- d) ------------------------------------#
+
+hist(aapllr,breaks="FD",freq=FALSE,main="Densité empirique de AAPL")
+curve(dnorm(x,mean(aapllr),sd(aapllr)),add = TRUE)
+legend("topright",legend = "densité normale",lty = 1,box.col = "white")
+
+hist(jpmlr,breaks="FD",freq=FALSE,main="Densité empirique de JPM")
+curve(dnorm(x,mean(jpmlr),sd(jpmlr)),add = TRUE)
+legend("topright",legend = "densité normale",lty = 1,box.col = "white")
+
+#------------------------------------- e) ------------------------------------#
+
+qqnorm(aapllr,main="AAPL Q-Q plot"); qqline(aapllr, col = "red")
+qqnorm(jpmlr,main="JPM Q-Q plot"); qqline(jpmlr, col = "red")
+
+#------------------------------------- f) ------------------------------------#
+
+plot(density(aapllr),main="AAPL log returns kernel density")
+plot(density(jpmlr),main="JPM log returns kernel density")
+
+#------------------------------------- g) ------------------------------------#
+
+plot(density(aapllr),main="AAPL log returns kernel density")
+curve(dnorm(x,mean(aapllr),sd(aapllr)),add = TRUE,col="red")
+
+plot(density(jpmlr),main="JPM log returns kernel density")
+curve(dnorm(x,mean(jpmlr),sd(jpmlr)),add = TRUE,col="red")
+
+####################################   3   ####################################
+
+shapiro.test(aapllr)
+shapiro.test(jpmlr)
+
+####################################   4   ####################################
+
+#------------------------------------- a) ------------------------------------#
+
+nig_AAPL <- fit.NIGuv(aapllr, opt.pars = c(alpha.bar = T, mu = T, 
+                                              sigma = T, gamma = T))
+coefficients(nig_AAPL)
+
+nig_JPM <- fit.NIGuv(jpmlr, opt.pars = c(alpha.bar = T, mu = T, 
+                                           sigma = T, gamma = T))
+coefficients(nig_JPM)
+
+#------------------------------------- b) ------------------------------------#
+
+hist(nig_AAPL,breaks=120)
+lines(density(aapllr),col="red")
+legend("right",legend="kernel density",lwd=2,col="red")
+
+hist(nig_JPM,breaks=120)
+lines(density(jpmlr),col="red")
+legend("right",legend="kernel density",lwd=2,col="red")
+
+######################            Problème 2            #######################
+
+####################################   1   ####################################
+
+#----------------------------------TIME BARS----------------------------------#
+
+AAPL <- read.csv("20210203_AAPL.csv")
+head(AAPL)
+AAPL$Price <- AAPL$Price/10000
+trade_date <- as.Date("2021-02-03")
+AAPL$timestamp <- as.POSIXct(trade_date) + milliseconds(AAPL$Time)
+
+x <- AAPL$Time[1]
+timestamps <- c()
+while (x<=AAPL$Time[length(AAPL$Time)]) {
+  x = x + 600000
+  y <- which.min(abs(AAPL$Time-x))
+  timestamps <- c(timestamps,y)
+}
+
+timebars <- data.frame()
+for (i in timestamps) {
+  timebars <- rbind(timebars,AAPL[i,])
+}
+
+plot(AAPL$timestamp,AAPL$Price,type="l",col="red",
+     xlab="timestamp",ylab="price",main="AAPL price, time bars")
+points(AAPL$timestamp[timestamps],timebars$Price,pch=18,col="blue")
+
+#----------------------------------TICK BARS----------------------------------#
+
+AAPL$cumulative.volume <- cumsum(AAPL$Shares)
+step <- round(AAPL$cumulative.volume[length(AAPL$cumulative.volume)]/96,-2)
+
+x <- 0
+trades <- c()
+while (x<=sum(AAPL$Shares)) {
+  x = x + step
+  y <- which.min(abs(AAPL$cumulative.volume-x))
+  trades <- c(trades,y)
+}
+
+tickbars <- data.frame()
+for (i in trades) {
+  tickbars <- rbind(tickbars,AAPL[i,])
+}
+
+plot(AAPL$timestamp,AAPL$Price,type="l",col="red",
+     xlab="timestamp",ylab="price",main="AAPL price, tick bars")
+points(AAPL$timestamp[trades],tickbars$Price,pch=18,col="blue")
+
+#---------------------------------DOLLAR BARS---------------------------------#
+
+AAPL$cumulativeMV <- AAPL$cumulative.volume*AAPL$Price
+step <- round(AAPL$cumulativeMV[length(AAPL$cumulativeMV)]/96,-2)
+
+x <- 0
+volume <- c()
+while (x<=AAPL$cumulativeMV[length(AAPL$cumulativeMV)]) {
+  x = x + step
+  y <- which.min(abs(AAPL$cumulativeMV-x))
+  volume <- c(volume,y)
+}
+
+dollarbars <- data.frame()
+for (i in volume) {
+  dollarbars <- rbind(dollarbars,AAPL[i,])
+}
+
+plot(AAPL$timestamp,AAPL$Price,type="l",col="red",
+     xlab="timestamp",ylab="price",main="AAPL price, money bars")
+points(AAPL$timestamp[volume],dollarbars$Price,pch=18,col="blue")
+
+####################################   2   ####################################
+
+h <- 5
+for (i in 1:length(tickbars[,1])) {
+  return <- (tickbars$Price[i+h]-tickbars$Price[i])/tickbars$Price[i]
+  tickbars$label[i] <- ifelse(return > 0, 1, ifelse(return < 0, -1,0))
+}
+
+plot(AAPL$timestamp,AAPL$Price,type="l",col="red",
+     xlab="timestamp",ylab="price",main="AAPL price, tick bars with labels")
+points(AAPL$timestamp[trades],tickbars$Price,pch=18,
+       col=ifelse(tickbars$label == -1,"blue",ifelse(tickbars$label == 0,"black","green")))
