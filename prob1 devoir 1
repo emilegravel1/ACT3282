@@ -1,3 +1,4 @@
+
 #1 JPM et AAPL vs SPY
 
 #2
@@ -102,10 +103,48 @@ qqnorm(logReturn2_jpm, main = "Q-Q Plot JPM"); qqline(logReturn2_jpm, col = 2)
 
 #f) L’estimation de densité par noyau
 
+dens_aapl <- density(logReturn2_aapl)
+dens_jpm <- density(logReturn2_jpm)
 
 
 
 #g) Un graphique de la densité estimée par noyau et de la densité d’une loi normale (dans le même graphique)
 
-#voir section4.R
+par(mfrow=c(1,1))
+plot(dens_aapl,xlim=c(-.04,.04),main="Daily Log-Returns - AAPL",sub="Kernel Density",type="l", xlab="Returns")
+lines(density(logReturn2_aapl,adjust=0.2),xlim=c(-.04,.04), lty=2,xlab="Returns")
+lines(density(logReturn2_aapl,adjust=3.5),xlim=c(-.04,.04), lty=3,xlab="Returns")
+
+par(mfrow=c(1,1))
+plot(dens_jpm,xlim=c(-.04,.04),main="Daily Log-Returns - JPM",sub="Kernel Density",type="l", xlab="Returns")
+lines(density(logReturn2_jpm,adjust=0.2),xlim=c(-.04,.04), lty=2,xlab="Returns")
+lines(density(logReturn2_jpm,adjust=3.5),xlim=c(-.04,.04), lty=3,xlab="Returns")
+
+
+
+#3 Test de normalite
+
+
+n_aapl <- length(logReturn2_aapl)
+normal_return_aapl <- rnorm(n_aapl, mu_aapl, sd_aapl)
+
+ks.test(as.numeric(logReturn_aapl), normal_return_aapl)
+
+plot(ecdf(as.numeric(logReturn2_aapl)), 
+     col = "red",
+     main = " ECDF of AAPL Log Returns" )
+lines(ecdf(normal_return_aapl), col = "blue")
+
+
+n_jpm <- length(logReturn2_jpm)
+normal_return_jpm <- rnorm(n_jpm, mu_jpm, sd_jpm)
+
+ks.test(as.numeric(logReturn_jpm), normal_return_jpm)
+
+plot(ecdf(as.numeric(logReturn2_jpm)), 
+     col = "red",
+     main = " ECDF of JPM Log Returns" )
+lines(ecdf(normal_return_jpm), col = "blue")
+
+#les deux ne sont pas normales
 
