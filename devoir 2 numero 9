@@ -1,0 +1,68 @@
+last_spread = residuals.iloc[-1]
+predicted_spread = forecast.iloc[-1]
+
+print("\nDernier spread :", last_spread)
+print("Spread prévu :", predicted_spread)
+
+# Décision de trading
+if predicted_spread < last_spread:
+    print("\nStratégie : SHORT le spread")
+    print(f"→ SHORT {S2.name} et LONG {S1.name}")
+elif predicted_spread > last_spread:
+    print("\nStratégie : LONG le spread")
+    print(f"→ LONG {S2.name} et SHORT {S1.name}")
+else:
+    print("\nStratégie : Aucune position")
+
+# =========================
+# (OPTIONNEL) SIGNAL Z-SCORE
+# =========================
+
+# Si tu veux aussi confirmer avec z-score
+spread_mavg30 = spread.rolling(window=30).mean()
+std_30 = spread.rolling(window=30).std()
+zscore = (spread - spread_mavg30) / std_30
+
+last_z = zscore.iloc[-1]
+print("\nZ-score actuel :", last_z)
+
+if last_z > 1:
+    print("Signal Z-score : SHORT spread")
+elif last_z < -1:
+    print("Signal Z-score : LONG spread")
+else:
+    print("Signal Z-score : neutre")
+
+
+# =========================
+# 9. PAPER-TRADING AVEC SIGNAL ET PNL FICTIF
+# =========================
+
+last_spread = residuals.iloc[-1]
+predicted_spread = forecast.iloc[-1]
+
+entry_S1 = S1.iloc[-1]
+entry_S2 = S2.iloc[-1]
+
+print("Dernier spread observé :", last_spread)
+print("Spread prévu :", predicted_spread)
+print("Prix actuel S1 :", entry_S1)
+print("Prix actuel S2 :", entry_S2)
+
+if predicted_spread > last_spread:
+    signal = "SHORT spread"
+    print("\nPosition fictive prise : SHORT spread")
+    print(f"→ SHORT {S2.name}")
+    print(f"→ LONG {S1.name}")
+    print(f"→ Ratio : 1 unité de {S2.name} contre {b:.4f} unité(s) de {S1.name}")
+
+elif predicted_spread < last_spread:
+    signal = "LONG spread"
+    print("\nPosition fictive prise : LONG spread")
+    print(f"→ LONG {S2.name}")
+    print(f"→ SHORT {S1.name}")
+    print(f"→ Ratio : 1 unité de {S2.name} contre {b:.4f} unité(s) de {S1.name}")
+
+else:
+    signal = "AUCUNE position"
+    print("\nPosition fictive prise : aucune position")

@@ -1,0 +1,36 @@
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+
+library(xts)
+library(lubridate)
+library(quantmod)
+library(ghyp)
+library(agricolae)
+library(PerformanceAnalytics)
+
+AAPL = read.csv("20210203_AAPL.csv",header=T)
+head(AAPL)
+AAPL$Price <- AAPL$Price/10000
+trade_date <- as.Date("2021-02-03")
+AAPL$timestamp <- as.POSIXct(trade_date) + milliseconds(AAPL$Time)
+
+n <- nrow(AAPL)
+
+group_size <- floor(n / 100)
+
+AAPL$group_id <- ceiling(seq_len(n) / group_size)
+
+# Voir combien de lignes par groupe
+table(AAPL$group_id)
+
+
+# indices de fin de chaque groupe (close)
+group_ends <- tapply(seq_len(n), AAPL$group_id, tail, 1)
+
+plot(AAPL$timestamp, AAPL$Price, type="l", col="red",
+     xlab="timestamp", ylab="price",
+     main="AAPL price with 100-group bars")
+
+points(AAPL$timestamp[group_ends],
+       AAPL$Price[group_ends],
+       pch=18, col="blue")
